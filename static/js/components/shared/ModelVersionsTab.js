@@ -5,6 +5,7 @@ import { showToast } from '../../utils/uiHelpers.js';
 import { translate } from '../../utils/i18nHelpers.js';
 import { state } from '../../state/index.js';
 import { formatFileSize } from './utils.js';
+import { showModelModal } from './ModelModal.js';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.mkv'];
 
@@ -628,6 +629,43 @@ export function initVersionsTab({
         }
 
         await refresh();
+
+        // Always reopen the model modal to the versions tab after deletion
+        // Use modelId from closure and record data - don't try to fetch by file path
+        // since the file may have been deleted
+        if (controller.record && Array.isArray(controller.record.versions) && controller.record.versions.length > 0 && modelId) {
+            try {
+                const firstVersion = controller.record.versions[0];
+                
+                // Construct minimal model object from record data
+                // Don't include file_path to avoid trying to fetch deleted file metadata
+                const modelData = {
+                    model_name: controller.record.name || firstVersion.name || 'Unknown Model',
+                    file_path: '', // Empty to prevent fetchModelMetadata from trying to load deleted file
+                    civitai: {
+                        modelId: controller.record.modelId || modelId,
+                        id: firstVersion.versionId,
+                    },
+                    from_civitai: true,
+                };
+
+                // Reopen the model modal and switch to versions tab
+                await showModelModal(modelData, modelType);
+                
+                // Switch to versions tab after a short delay to ensure modal is rendered
+                setTimeout(() => {
+                    const versionsTabButton = document.querySelector(
+                        '#modelModal .showcase-tabs .tab-btn[data-tab="versions"]'
+                    );
+                    if (versionsTabButton) {
+                        versionsTabButton.click();
+                    }
+                }, 100);
+            } catch (error) {
+                console.error('Failed to reopen model modal after deletion:', error);
+                // If reopening fails, just continue with default behavior
+            }
+        }
     }
 
     function showDeleteVersionModal(version, triggerButton) {
